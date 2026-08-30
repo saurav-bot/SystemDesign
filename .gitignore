@@ -1,0 +1,41 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python Bytecode & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Dynamically Generated Media Files & Segments (HLS / DASH / Recordings)
+*.ts
+*.m3u8
+*.mpd
+*.m4s
+*.mp4
+*.flv
+*.mkv
+*.avi
+*.mov
+media/hls/*
+media/dash/*
+twitch_server/media/hls/*
+twitch_server/media/dash/*
+!**/media/hls/.gitkeep
+!**/media/dash/.gitkeep
+
+# IDE / Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+.DS_Store
+
+# OS / Log files
+*.log

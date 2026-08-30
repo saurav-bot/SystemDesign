@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitch Server | Real-Time Media & Protocol Laboratory</title>
+
+  <!-- Google Fonts & Font Awesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- HLS.js, Dash.js, QRCode.js -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dashjs@latest/dist/dash.all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Navbar Header -->
+    <header class="navbar">
+      <div class="brand">
+        <i class="fa-solid fa-bolt-lightning brand-icon"></i>
+        <div class="brand-text">
+          <span class="brand-title">Twitch<span class="brand-highlight">Server</span></span>
+          <span class="brand-tagline">Real-Time Media Protocol Laboratory</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="lan-pill" id="lanPill" title="Click to copy LAN URL">
+          <i class="fa-solid fa-wifi"></i>
+          <span id="lanIpDisplay">LAN: Detecting...</span>
+          <i class="fa-regular fa-copy copy-icon"></i>
+        </div>
+
+        <button class="btn btn-secondary btn-sm" id="qrBtn">
+          <i class="fa-solid fa-qrcode"></i> Connect Phone
+        </button>
+
+        <div class="status-badge" id="systemStatus">
+          <span class="status-dot green"></span> Server Online
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Dashboard Grid -->
+    <main class="dashboard">
+
+      <!-- WebCam Diagnostic Notification Banner -->
+      <div class="alert-banner hidden" id="webcamAlert">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="webcamAlertText">Camera missing or permission blocked. Switched automatically to Synthetic Timestamp Test Generator.</span>
+        <button class="btn-close-banner" onclick="document.getElementById('webcamAlert').classList.add('hidden')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- Swappable Protocol Control Bar -->
+      <section class="protocol-bar">
+        <div class="protocol-selector-group">
+          <div class="selector-box">
+            <label><i class="fa-solid fa-upload"></i> Broadcaster / Ingest Protocol</label>
+            <select id="publisherProtocolSelect">
+              <option value="WHIP" selected>WHIP (WebRTC HTTP Ingestion)</option>
+              <option value="WEBRTC_DIRECT">WebRTC (Direct Peer WebSocket)</option>
+              <option value="TEST_SIGNAL">Synthetic Test Pattern (Timestamp Generator)</option>
+              <option value="RTMP_OBS">RTMP Ingest (OBS Studio / External App)</option>
+            </select>
+          </div>
+
+          <div class="swap-icon-container">
+            <i class="fa-solid fa-arrow-right-arrow-left"></i>
+          </div>
+
+          <div class="selector-box">
+            <label><i class="fa-solid fa-download"></i> Subscriber / Playback Protocol</label>
+            <select id="subscriberProtocolSelect">
+              <option value="WHEP" selected>WHEP (WebRTC HTTP Egress)</option>
+              <option value="WEBRTC_DIRECT">WebRTC (Direct Peer WebSocket)</option>
+              <option value="LL_HLS">LL-HLS / HLS (Hls.js Engine)</option>
+              <option value="DASH">DASH (Dash.js Engine)</option>
+              <option value="HTTP_FLV">HTTP-FLV (Sub-second Chunked)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="quick-stats-pills">
+          <div class="metric-pill">
+            <span class="pill-label">Est. Latency</span>
+            <span class="pill-value neon-green" id="estLatencyPill">~50 ms</span>
+          </div>
+          <div class="metric-pill">
+            <span class="pill-label">Transport</span>
+            <span class="pill-value" id="transportPill">UDP / SRTP</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Video Studios: Broadcaster & Player -->
+      <section class="studios-container">
+        
+        <!-- Broadcaster Studio -->
+        <div class="studio-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-video"></i> Broadcaster Studio</h3>
+            <span class="badge" id="pubProtocolBadge">WHIP</span>
+          </div>
+
+          <div class="video-wrapper">
+            <video id="publisherVideo" autoplay muted playsinline></video>
+            <canvas id="timestampCanvas" class="overlay-canvas"></canvas>
+            
+            <div class="video-overlay-info" id="pubOverlayInfo">
+              <span id="pubResolution">1280x720</span> | <span id="pubFps">30 FPS</span>
+            </div>
+          </div>
+
+          <div class="card-controls">
+            <div class="source-selector">
+              <button class="btn btn-tab active" data-source="webcam"><i class="fa-solid fa-camera"></i> Webcam</button>
+              <button class="btn btn-tab" data-source="screen"><i class="fa-solid fa-desktop"></i> Screen</button>
+              <button class="btn btn-tab" data-source="pattern"><i class="fa-solid fa-clock"></i> Timestamp Generator</button>
+            </div>
+
+            <div class="action-buttons">
+              <button class="btn btn-primary" id="startPubBtn"><i class="fa-solid fa-play"></i> Start Ingest</button>
+              <button class="btn btn-danger hidden" id="stopPubBtn"><i class="fa-solid fa-stop"></i> Stop Stream</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Player Studio -->
+        <div class="studio-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-tv"></i> Player Studio (Subscriber)</h3>
+            <span class="badge badge-purple" id="subProtocolBadge">WHEP</span>
+          </div>
+
+          <div class="video-wrapper">
+            <video id="subscriberVideo" autoplay playsinline controls></video>
+            
+            <div class="live-tag">
+              <span class="pulse-dot"></span> LIVE
+            </div>
+
+            <div class="latency-overlay" id="latencyOverlay">
+              Latency: <span id="latencyValue">--</span> ms
+            </div>
+          </div>
+
+          <div class="card-controls">
+            <button class="btn btn-primary" id="connectSubBtn"><i class="fa-solid fa-plug"></i> Connect Player</button>
+            <button class="btn btn-secondary" id="syncClockBtn"><i class="fa-solid fa-rotate-right"></i> Measure Glass-to-Glass Latency</button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Live Performance & Inspection Metrics -->
+      <section class="metrics-grid">
+        
+        <div class="metric-card">
+          <div class="card-title">Glass-to-Glass Latency</div>
+          <div class="gauge-container">
+            <div class="latency-gauge-value" id="gaugeValue">75 <small>ms</small></div>
+            <div class="gauge-bar-track">
+              <div class="gauge-bar-fill" id="gaugeFill" style="width: 15%;"></div>
+            </div>
+            <div class="gauge-labels">
+              <span>0ms (Ultra-Low)</span>
+              <span>2s (LL-HLS)</span>
+              <span>10s (Standard HLS)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="card-title">Bitrate (Throughput)</div>
+          <div class="stat-number neon-blue" id="bitrateDisplay">2,450 <small>kbps</small></div>
+          <div class="stat-sub">H.264 / AAC Codec Stream</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="card-title">Frame Rate & Drops</div>
+          <div class="stat-number neon-purple" id="fpsDisplay">59.8 <small>FPS</small></div>
+          <div class="stat-sub">Dropped Frames: <span id="droppedFrames">0</span> (0.0%)</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="card-title">Buffer Health</div>
+          <div class="stat-number neon-yellow" id="bufferDisplay">120 <small>ms</small></div>
+          <div class="stat-sub">Jitter Buffer Occupancy</div>
+        </div>
+
+      </section>
+
+      <!-- Interactive Protocol Deep-Dive & Twitch Architecture Inspector -->
+      <section class="inspector-section">
+        <div class="section-header">
+          <h2><i class="fa-solid fa-layer-group"></i> Protocol Matrix & Twitch Architecture Explorer</h2>
+          <p>Understand real-time protocol trade-offs, packet structures, and scale delivery pipelines.</p>
+        </div>
+
+        <div class="matrix-table-wrapper">
+          <table class="protocol-table">
+            <thead>
+              <tr>
+                <th>Protocol</th>
+                <th>Typical Latency</th>
+                <th>Transport Layer</th>
+                <th>Browser Ingest</th>
+                <th>Browser Egress</th>
+                <th>Twitch / Industry Use Case</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="highlight-row" id="row-WHIP">
+                <td><strong>WHIP</strong> (WebRTC Ingest)</td>
+                <td><span class="tag tag-green">50 - 200 ms</span></td>
+                <td>UDP / DTLS / SRTP</td>
+                <td><i class="fa-solid fa-check check-icon"></i> Native Browser API</td>
+                <td>N/A (Ingest Protocol)</td>
+                <td>Modern OBS / Browser WebCam contribution</td>
+              </tr>
+              <tr id="row-WHEP">
+                <td><strong>WHEP</strong> (WebRTC Egress)</td>
+                <td><span class="tag tag-green">50 - 200 ms</span></td>
+                <td>UDP / DTLS / SRTP</td>
+                <td>N/A (Egress Protocol)</td>
+                <td><i class="fa-solid fa-check check-icon"></i> Native Video / PeerConnection</td>
+                <td>Interactive stream viewing & real-time chat sync</td>
+              </tr>
+              <tr id="row-RTMP">
+                <td><strong>RTMP</strong> (Real-Time Messaging)</td>
+                <td><span class="tag tag-yellow">1.5 - 3.0 s</span></td>
+                <td>TCP / FLV Tags</td>
+                <td><i class="fa-solid fa-xmark cross-icon"></i> Needs Plugin / WebSockets</td>
+                <td><i class="fa-solid fa-xmark cross-icon"></i> Deprecated in Browsers</td>
+                <td>Legacy & OBS default contribution ingest</td>
+              </tr>
+              <tr id="row-LL_HLS">
+                <td><strong>LL-HLS</strong> (Low-Latency HLS)</td>
+                <td><span class="tag tag-yellow">1.0 - 2.5 s</span></td>
+                <td>HTTP / TCP (fMP4 / TS)</td>
+                <td>N/A</td>
+                <td><i class="fa-solid fa-check check-icon"></i> Hls.js / Native Safari</td>
+                <td>Twitch default broadcast delivery format</td>
+              </tr>
+              <tr id="row-DASH">
+                <td><strong>LL-DASH</strong> (Low-Latency DASH)</td>
+                <td><span class="tag tag-yellow">1.0 - 3.0 s</span></td>
+                <td>HTTP / Chunked Transfer</td>
+                <td>N/A</td>
+                <td><i class="fa-solid fa-check check-icon"></i> Dash.js</td>
+                <td>YouTube / Netflix adaptive streaming</td>
+              </tr>
+              <tr id="row-SRT">
+                <td><strong>SRT</strong> (Secure Reliable Transport)</td>
+                <td><span class="tag tag-green">100 - 500 ms</span></td>
+                <td>UDP / ARQ Error Correction</td>
+                <td>Requires WASM</td>
+                <td>Requires WASM</td>
+                <td>Broadcast contribution over unreliable networks</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Twitch System Architecture Diagram Component -->
+        <div class="architecture-box">
+          <h3><i class="fa-solid fa-network-wired"></i> Twitch-Scale End-to-End Media Pipeline</h3>
+          <div class="architecture-flow">
+            <div class="flow-step">
+              <div class="step-title">1. Contribution Ingest</div>
+              <div class="step-desc">Broadcaster pushes RTMP (Port 1935) or WHIP (HTTP POST SDP) to Nearest Edge PoP.</div>
+            </div>
+            <div class="flow-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+            <div class="flow-step">
+              <div class="step-title">2. Real-Time Transcoder</div>
+              <div class="step-desc">FFmpeg/GPU Cluster transposes stream into Adaptive Bitrate ladder (1080p60, 720p, 480p).</div>
+            </div>
+            <div class="flow-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+            <div class="flow-step">
+              <div class="step-title">3. Origin Shield & Packaging</div>
+              <div class="step-desc">Generates 1-second fMP4 chunks, LL-HLS playlists (.m3u8), and WebRTC WHEP relays.</div>
+            </div>
+            <div class="flow-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+            <div class="flow-step">
+              <div class="step-title">4. Edge CDN & Player</div>
+              <div class="step-desc">CDN caches HLS fragments. Viewers fetch via Hls.js/WHEP with synchronized live chat.</div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Local Network LAN & OBS Setup Assistant -->
+      <section class="lan-section">
+        <div class="section-header">
+          <h2><i class="fa-solid fa-mobile-screen-button"></i> Multi-Device Local Area Network (LAN) Setup</h2>
+          <p>Connect phones, tablets, or secondary PCs on your Wi-Fi network to test live streams.</p>
+        </div>
+
+        <div class="lan-content-grid">
+          <div class="lan-card">
+            <h4><i class="fa-solid fa-qrcode"></i> Mobile Web Gateway</h4>
+            <p>Scan this QR code from your phone camera to open the Twitch server live on your device!</p>
+            <div id="qrcodeContainer" class="qrcode-wrapper"></div>
+            <div class="lan-url-box" id="lanFullUrl">http://192.168.x.x:8000</div>
+          </div>
+
+          <div class="lan-card">
+            <h4><i class="fa-solid fa-sliders"></i> OBS Studio / External App Setup</h4>
+            <p>In OBS Studio under <strong>Settings -> Stream</strong>, select <strong>Custom...</strong> and set:</p>
+            <div class="code-box">
+              <div class="code-line"><span class="code-key">Server:</span> <span class="code-val" id="obsServerUrl">rtmp://192.168.x.x:1935/live</span> <button class="btn-copy" onclick="navigator.clipboard.writeText(document.getElementById('obsServerUrl').innerText)"><i class="fa-regular fa-copy"></i></button></div>
+              <div class="code-line"><span class="code-key">Stream Key:</span> <span class="code-val">test_stream</span></div>
+            </div>
+            <p class="small-text"><i class="fa-solid fa-lightbulb"></i> OBS will stream directly to your local Python backend on Port 1935.</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div>Twitch Server Verification Engine &copy; 2026 | Standalone Python Package (`python -m twitch_server`)</div>
+    </footer>
+  </div>
+
+  <!-- QR Code Modal -->
+  <div class="modal-overlay hidden" id="qrModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Connect Mobile Device on LAN</h3>
+        <button class="btn-close" id="closeQrModal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div id="modalQrcode"></div>
+        <p class="modal-sub">Scan with smartphone camera on the same Wi-Fi network.</p>
+        <div class="lan-url-box" id="modalLanUrl">http://...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Scripts -->
+  <script src="/js/modules/protocolAdapters.js"></script>
+  <script src="/js/modules/broadcaster.js"></script>
+  <script src="/js/modules/player.js"></script>
+  <script src="/js/modules/latencyTester.js"></script>
+  <script src="/js/modules/inspector.js"></script>
+  <script src="/js/modules/lanManager.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

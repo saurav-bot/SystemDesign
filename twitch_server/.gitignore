@@ -1,0 +1,18 @@
+# Module-level ignore rules for twitch_server
+
+# Dynamically generated HLS & DASH video segments
+media/hls/*
+media/dash/*
+!media/hls/.gitkeep
+!media/dash/.gitkeep
+
+*.ts
+*.m3u8
+*.mpd
+*.m4s
+*.mp4
+*.flv
+
+# Python Bytecode
+__pycache__/
+*.py[cod]
